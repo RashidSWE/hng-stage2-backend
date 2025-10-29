@@ -23,16 +23,26 @@ async def refresh_data(db: AsyncSession = Depends(get_session)):
         if not countries_data:
             raise HTTPException(status_code=404, detail="No country data found")
         
-        for item in countries_data:
-            result = await db.execute(select(Country).where(Country.name == item["name"]))
-            existing = result.scalar_one_or_none()
+        existing_countries_result = await db.execute(select(Country))
+        existing_countries = existing_countries_result.scalars().all()
 
-            if existing:
+        # Convert to dict for O(1) lookup
+        existing_map = {c.name: c for c in existing_countries}
+
+        new_countries = []
+        for item in countries_data:
+            name = item["name"]
+            if name in existing_map:
+                # Update existing record
+                existing = existing_map[name]
                 for key, value in item.items():
                     setattr(existing, key, value)
             else:
-                country = Country(**item)
-                db.add(country)
+                # Add new country
+                new_countries.append(Country(**item))
+
+        if new_countries:
+            db.add_all(new_countries)
         
         await db.commit()
         await generate_summary_image(db)
@@ -91,6 +101,14 @@ async def get_country_by_name(name: str, db: AsyncSession = Depends(get_session)
         query = select(Country).where(Country.name == name)
         result = await db.execute(query)
         country = result.scalars().first()
+
+        if not country:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "Country not found"
+                }
+            )
 
         return country
     except Exception as e:
