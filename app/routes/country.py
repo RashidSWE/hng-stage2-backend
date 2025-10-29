@@ -138,7 +138,7 @@ async def get_status(db: AsyncSession = Depends(get_session)):
         last_refresh = last_refresh_query.scalar_one()
 
         return {
-            "total_countires": total_countries,
+            "total_countries": total_countries,
             "last_refreshed_at": last_refresh
         }
     except Exception as e:
